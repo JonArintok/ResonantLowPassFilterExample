@@ -7,9 +7,12 @@
 #include <SDL2/SDL.h>
 
 #define fr(i, bound) for (int i = 0; i < (bound); i++)
+double const tau = 6.28318530717958647692528676655900576839433879875;
+double sinTau(double n) {return sin(tau*n);}
+double fractionalPart(double n) {return n - (long)n;}
 
-static void sdlec(int line, const char *file) {
-	const char *error = SDL_GetError();
+static void sdlec(int line, char const *file) {
+	char const *error = SDL_GetError();
 	if (!error || !error[0]) return;
 	printf("SDL error at line %i in %s :\n%s\n", line, file, error);
 	SDL_ClearError();
@@ -29,7 +32,7 @@ uint32_t sampleRate = 48000; // may be changed by init(), but not after
 uint32_t floatStreamSize = 1024; // must be a power of 2
 
 SDL_AudioSpec audioSpec;
-void logSpec(const SDL_AudioSpec as) {
+void logSpec(SDL_AudioSpec const as) {
 	printf(
 		" freq______%5d\n"
 		" format____%5d\n"
@@ -69,6 +72,10 @@ int init(void) {
 	want.samples  = 1024; // must be a power of 2
 	want.callback = audioCallback;
 	audioDeviceId = SDL_OpenAudioDevice(NULL, 0, &want, &audioSpec, 0);_sdlec;
+	puts("want:");
+	logSpec(want);
+	puts("audioSpec:");
+	logSpec(audioSpec);
 	if (!audioDeviceId) return 1;
 	sampleRate = audioSpec.freq;
 	floatStreamSize = audioSpec.size/sizeof(float);
