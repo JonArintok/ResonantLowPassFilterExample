@@ -5,11 +5,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <SDL2/SDL.h>
-
-#define fr(i, bound) for (int i = 0; i < (bound); i++)
-double const tau = 6.28318530717958647692528676655900576839433879875;
-double sinTau(double n) {return sin(tau*n);}
-double fractionalPart(double n) {return n - (long)n;}
+#include "options.h"
 
 static void sdlec(int line, char const *file) {
 	char const *error = SDL_GetError();
@@ -19,6 +15,10 @@ static void sdlec(int line, char const *file) {
 }
 #define _sdlec sdlec(__LINE__, __FILE__);
 
+#define fr(i, bound) for (int i = 0; i < (bound); i++)
+double const tau = 6.28318530717958647692528676655900576839433879875;
+double sinTau(double n) {return sin(tau*n);}
+double fractionalPart(double n) {return n - (long)n;}
 
 double const A4freq  = 440.0;
 double const A4pitch =  57.0;
@@ -49,36 +49,55 @@ void logSpec(SDL_AudioSpec const as) {
 	);
 }
 
+double tonePhase = 0;
 void audioCallback(void *_unused, uint8_t *byteStream, int byteStreamLength) {
-	
+	float *floatStream = (float*)byteStream;
+	double const toneInc = (2.0*freqFromPitch(tonePitch))/sampleRate;
+	for (int s = 0; s < floatStreamSize; s += 2) {
+		// generate saw wave
+		tonePhase -= toneInc;
+		if (tonePhase < -1) {
+			tonePhase += 2;
+		}
+		double sample = tonePhase;
+		// LP filter
+		
+		// write to buffer
+		floatStream[s  ] = sample;
+		floatStream[s+1] = sample;
+	}
 }
 
 SDL_AudioDeviceID audioDeviceId = 0;
 
 int init(void) {
 	SDL_Init(SDL_INIT_AUDIO);_sdlec;
-	int audioOutDeviceCount = SDL_GetNumAudioDevices(SDL_FALSE);_sdlec;
-	int audioInDeviceCount  = SDL_GetNumAudioDevices(SDL_TRUE);_sdlec;
-	fr (i, audioOutDeviceCount) {
-		SDL_Log("output device %d: %s\n", i, SDL_GetAudioDeviceName(i, SDL_FALSE));_sdlec;
-	}
-	fr (i, audioInDeviceCount) {
-		SDL_Log("input device %d: %s\n", i, SDL_GetAudioDeviceName(i, SDL_TRUE));_sdlec;
+	{
+		int audioOutDeviceCount = SDL_GetNumAudioDevices(SDL_FALSE);_sdlec;
+		int audioInDeviceCount  = SDL_GetNumAudioDevices(SDL_TRUE);_sdlec;
+		fr (i, audioOutDeviceCount) {
+			printf("output device %d: %s\n", i, SDL_GetAudioDeviceName(i, SDL_FALSE));
+		}
+		fr (i, audioInDeviceCount) {
+			printf("input device %d: %s\n", i, SDL_GetAudioDeviceName(i, SDL_TRUE));
+		}
+		puts("");
 	}
 	SDL_AudioSpec want = {0};
 	want.freq     = sampleRate;
-	want.format   = AUDIO_F32;
+	want.format   = AUDIO_F32SYS;
 	want.channels = 2; // stereo
 	want.samples  = 1024; // must be a power of 2
 	want.callback = audioCallback;
 	audioDeviceId = SDL_OpenAudioDevice(NULL, 0, &want, &audioSpec, 0);_sdlec;
-	puts("want:");
+	puts("wanted audioSpec:");
 	logSpec(want);
-	puts("audioSpec:");
+	puts("aquired audioSpec:");
 	logSpec(audioSpec);
 	if (!audioDeviceId) return 1;
 	sampleRate = audioSpec.freq;
 	floatStreamSize = audioSpec.size/sizeof(float);
+	SDL_PauseAudioDevice(audioDeviceId	, 0);_sdlec;
 	return 0;
 }
 
