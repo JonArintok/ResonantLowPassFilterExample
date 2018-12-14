@@ -50,41 +50,38 @@ void logSpec(SDL_AudioSpec const as) {
 
 void audioCallback(void *_unused, uint8_t *byteStream, int byteStreamLength) {
 	float *floatStream = (float*)byteStream;
-	double static tonePhase = 0;
+	double static tonePhase = 0; // 0 to 1
 	double static const tonePitch = 57;
 	double const toneInc = freqFromPitch(tonePitch)/sampleRate;
+	
+	float static activeHistoryLength = 1;
+	activeHistoryLength += 0.05;
+	#define maxHistoryLength 64
+	if (activeHistoryLength > maxHistoryLength) activeHistoryLength = 1;
+	printf("activeHistoryLength: %f\n", activeHistoryLength);
+	
 	for (int s = 0; s < floatStreamSize; s += 2) {
 		// generate saw wave
 		tonePhase -= toneInc;
 		if (tonePhase < 0) {
 			tonePhase += 1;
 		}
-		double sample = tonePhase;
+		double const toneSample = tonePhase;
+		
 		// filter
-		{
-			double static const LPFCutoffFreq = 880;
-			double static const LPFResonance = 0.5;
-			double static const p = LPFCutoffFreq + 0.8*LPFCutoffFreq*(1.0 - LPFCutoffFreq);
-			double static const f = p + p - 1.0;
-			double const q = 0.5*(1.0 + 0.5*q*(1.0 - q + 5.6*q*q));
-			double static b0=0, b1=0, b2=0, b3=0, b4=0;
-			double const in = sample - q*b4;
-			double t1 = b1;
-			double t2 = b2;
-			b1 = (in + b0)*p - b1*f;
-			b2 = (b1 + t1)*p - b2*f;
-			t1 = b3;
-			b3 = (b2 + t2)*p - b3*f;
-			b4 = (b3 + t1)*p - b4*f;
-			b4 = b4 - b4*b4*b4*(5.0/3.0); //clipping
-			b0 = in;
-			sample = b4; // Lowpass output
-			//sample = in - b4; // Highpass output
-			//sample = 3.0f*(b3 - b4); // Bandpass output
+		float static history[maxHistoryLength] = {0};
+		double sum = 0;
+		fr (i, activeHistoryLength-1) {
+			history[i] = history[i+1];
+			sum += history[i];
 		}
-		// write to buffer
-		floatStream[s  ] = sample*2 - 1;
-		floatStream[s+1] = sample*2 - 1;
+		history[(int)activeHistoryLength-1] = toneSample;
+		sum += toneSample;
+		float const filteredSample = sum/activeHistoryLength;
+		
+		// write to buffer, -1 to 1
+		floatStream[s  ] = filteredSample*2 - 1;
+		floatStream[s+1] = filteredSample*2 - 1;
 	}
 }
 
