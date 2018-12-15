@@ -55,7 +55,7 @@ void audioCallback(void *_unused, uint8_t *byteStream, int byteStreamLength) {
 	double const toneInc = freqFromPitch(tonePitch)/sampleRate;
 	
 	float static activeHistoryLength = 1;
-	activeHistoryLength += 0.05;
+	activeHistoryLength += 0.2;
 	#define maxHistoryLength 64
 	if (activeHistoryLength > maxHistoryLength) activeHistoryLength = 1;
 	printf("activeHistoryLength: %f\n", activeHistoryLength);
