@@ -80,7 +80,7 @@ void audioCallback(void *_unused, uint8_t *byteStream, int byteStreamLength) {
 		fr (i, toneHistoryLength) {
 			filterFreqModPhase += filterFreqModPhaseInc;
 			if (filterFreqModPhase > 1) filterFreqModPhase -= 1;
-			double const filterPitch = lerp(12, 93, filterFreqModPhase);
+			double const filterPitch = lerp(0, 57, sinTau(filterFreqModPhase)/2 + 1);
 			double const filterPhaseInc = freqFromPitch(filterPitch)/sampleRate;
 			if (filterPhaseInc > 1) puts("WARNING: filterPhaseInc > 1");
 			filterPhase += filterPhaseInc;
