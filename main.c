@@ -5,6 +5,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <SDL2/SDL.h>
+#include "filter.h"
 
 static void sdlec(int line, char const *file) {
 	char const *error = SDL_GetError();
@@ -18,6 +19,7 @@ static void sdlec(int line, char const *file) {
 double const tau = 6.28318530717958647692528676655900576839433879875;
 double sinTau(double n) {return sin(tau*n);}
 double fractionalPart(double n) {return n - (long)n;}
+double lerp(double l, double r, double n) {return l + (r-l)*n;}
 
 double const A4freq  = 440.0;
 double const A4pitch =  57.0;
@@ -48,58 +50,48 @@ void logSpec(SDL_AudioSpec const as) {
 	);
 }
 
+filterModule filter = {
+	.cutoff = 0.999999,
+	.resonance = 0,
+	.feedbackAmount = 0,
+	.b0 = 0,
+	.b1 = 0,
+	.mode = filterMode_LP
+};
+
 void audioCallback(void *_unused, uint8_t *byteStream, int byteStreamLength) {
 	float *floatStream = (float*)byteStream;
+	
+	// tone
 	double static tonePhase = 0;
 	double static const tonePitch = 57;
 	double const toneInc = freqFromPitch(tonePitch)/sampleRate;
+	if (toneInc > 1) puts("WARNING: toneInc > 1");
 	
-	double static const LPFCutoffFreq = 220;
-	double static const LPFResonance = 0.5;
-	double static q = 1.0 - LPFCutoffFreq;
-	double static const p = LPFCutoffFreq + 0.8*LPFCutoffFreq*(1.0 - LPFCutoffFreq);
-	double static f = p + p - 1.0;
-	printf(
-		"LPFCutoffFreq: %f\n"
-		"LPFResonance: %f\n"
-		"p: %f\n"
-		"f: %f\n"
-		"q: %f\n",
-		LPFCutoffFreq,
-		LPFResonance,
-		p,
-		f,
-		q
-	);
-	double static b0=0, b1=0, b2=0, b3=0, b4=0;
+	// cutoff modulation
+	double static cutoffModPhase = 0;
+	double const cutoffModPhaseInc = 0.5/sampleRate;
+	if (cutoffModPhaseInc > 1) puts("WARNING: cutoffModPhaseInc > 1");
+	
+	//printf("filter.cutoff: %f\n", filter.cutoff);
+	//logFilterModule(filter);
 	
 	for (int s = 0; s < floatStreamSize; s += 2) {
-		// generate saw wave
+		// generate saw wave tone
 		tonePhase -= toneInc;
-		if (tonePhase < 0) {
-			tonePhase += 1;
-		}
-		double sample = tonePhase;
+		if (tonePhase < 0) tonePhase += 1;
+		double const sample = tonePhase*2 - 1;
 		
-		// filter
-		q = 0.5*(1.0 + 0.5*q*(1.0 - q + 5.6*q*q));
-		double const in = sample - q*b4;
-		double t1 = b1;
-		double t2 = b2;
-		b1 = (in + b0)*p - b1*f;
-		b2 = (b1 + t1)*p - b2*f;
-		t1 = b3;
-		b3 = (b2 + t2)*p - b3*f;
-		b4 = (b3 + t1)*p - b4*f;
-		b4 = b4 - b4*b4*b4*(5.0/3.0); //clipping
-		b0 = in;
-		sample = b4; // Lowpass output
-		//sample = in - b4; // Highpass output
-		//sample = 3.0f*(b3 - b4); // Bandpass output
+		// generate sine wave cutoff modulation
+		cutoffModPhase += cutoffModPhaseInc;
+		if (cutoffModPhase >= 1) cutoffModPhase -= 1;
+		setCutoff(&filter, sinTau(cutoffModPhase)/2 + 0.5);
+		// filter sample
+		double const filteredSample = filterSample(&filter, sample); // filter the sample
 		
 		// write to buffer
-		floatStream[s  ] = sample*2 - 1;
-		floatStream[s+1] = sample*2 - 1;
+		floatStream[s  ] = filteredSample;
+		floatStream[s+1] = filteredSample;
 	}
 }
 
