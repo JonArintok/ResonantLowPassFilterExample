@@ -5,6 +5,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <SDL2/SDL.h>
+#include "filter.h"
 
 static void sdlec(int line, char const *file) {
 	char const *error = SDL_GetError();
@@ -49,45 +50,44 @@ void logSpec(SDL_AudioSpec const as) {
 	);
 }
 
+filterModule filter = {
+	.cutoff = 0.999999,
+	.resonance = 0,
+	.feedbackAmount = 0,
+	.b0 = 0,
+	.b1 = 0,
+	.mode = filterMode_LP
+};
+
 void audioCallback(void *_unused, uint8_t *byteStream, int byteStreamLength) {
 	float *floatStream = (float*)byteStream;
-	// tone (saw wave)
-	double static tonePhase = 0; // 0 to 1
-	double static tonePitch = 57;
-	double const tonePhaseInc = freqFromPitch(tonePitch)/sampleRate;
-	if (tonePhaseInc > 1) puts("WARNING: tonePhaseInc > 1");
-	#define toneHistoryLength 4
-	float static toneHistory[toneHistoryLength] = {0};
 	
-	// filter sine
-	double static filterPhase = 0; // 0 to 1
+	// tone
+	double static tonePhase = 0;
+	double static const tonePitch = 57;
+	double const toneInc = freqFromPitch(tonePitch)/sampleRate;
+	if (toneInc > 1) puts("WARNING: toneInc > 1");
 	
-	// filter frequency modulation
-	double static filterFreqModPhase = 0; // 0 to 1
-	double const filterFreqModPhaseInc = 0.2/sampleRate;
-	if (filterFreqModPhaseInc > 1) puts("WARNING: filterFreqModPhaseInc > 1");
+	// cutoff modulation
+	double static cutoffModPhase = 0;
+	double const cutoffModPhaseInc = 0.5/sampleRate;
+	if (cutoffModPhaseInc > 1) puts("WARNING: cutoffModPhaseInc > 1");
+	
+	//printf("filter.cutoff: %f\n", filter.cutoff);
+	//logFilterModule(filter);
 	
 	for (int s = 0; s < floatStreamSize; s += 2) {
-		// generate saw wave
-		tonePhase -= tonePhaseInc;
+		// generate saw wave tone
+		tonePhase -= toneInc;
 		if (tonePhase < 0) tonePhase += 1;
-		fr (i, toneHistoryLength-1) toneHistory[i] = toneHistory[i+1];
-		double const toneSample =  tonePhase*2 - 1; // -1 to 1
-		toneHistory[toneHistoryLength-1] = toneSample;
+		double const sample = tonePhase*2 - 1;
 		
-		// filter
-		double filteredSample;
-		fr (i, toneHistoryLength) {
-			filterFreqModPhase += filterFreqModPhaseInc;
-			if (filterFreqModPhase > 1) filterFreqModPhase -= 1;
-			double const filterPitch = lerp(0, 57, sinTau(filterFreqModPhase)/2 + 1);
-			double const filterPhaseInc = freqFromPitch(filterPitch)/sampleRate;
-			if (filterPhaseInc > 1) puts("WARNING: filterPhaseInc > 1");
-			filterPhase += filterPhaseInc;
-			if (filterPhase > 1) filterPhase -= 1;
-			filteredSample += toneHistory[i]*sinTau(filterPhase);
-		}
-		filteredSample /= toneHistoryLength;
+		// generate sine wave cutoff modulation
+		cutoffModPhase += cutoffModPhaseInc;
+		if (cutoffModPhase >= 1) cutoffModPhase -= 1;
+		setCutoff(&filter, sinTau(cutoffModPhase)/2 + 0.5);
+		// filter sample
+		double const filteredSample = filterSample(&filter, sample); // filter the sample
 		
 		// write to buffer
 		floatStream[s  ] = filteredSample;
