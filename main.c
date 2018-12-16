@@ -18,6 +18,7 @@ static void sdlec(int line, char const *file) {
 double const tau = 6.28318530717958647692528676655900576839433879875;
 double sinTau(double n) {return sin(tau*n);}
 double fractionalPart(double n) {return n - (long)n;}
+double lerp(double l, double r, double n) {return l + (r-l)*n;}
 
 double const A4freq  = 440.0;
 double const A4pitch =  57.0;
@@ -50,38 +51,47 @@ void logSpec(SDL_AudioSpec const as) {
 
 void audioCallback(void *_unused, uint8_t *byteStream, int byteStreamLength) {
 	float *floatStream = (float*)byteStream;
+	// tone (saw wave)
 	double static tonePhase = 0; // 0 to 1
-	double static const tonePitch = 57;
-	double const toneInc = freqFromPitch(tonePitch)/sampleRate;
+	double static tonePitch = 57;
+	double const tonePhaseInc = freqFromPitch(tonePitch)/sampleRate;
+	if (tonePhaseInc > 1) puts("WARNING: tonePhaseInc > 1");
+	#define toneHistoryLength 4
+	float static toneHistory[toneHistoryLength] = {0};
 	
-	float static activeHistoryLength = 1;
-	activeHistoryLength += 0.2;
-	#define maxHistoryLength 64
-	if (activeHistoryLength > maxHistoryLength) activeHistoryLength = 1;
-	printf("activeHistoryLength: %f\n", activeHistoryLength);
+	// filter sine
+	double static filterPhase = 0; // 0 to 1
+	
+	// filter frequency modulation
+	double static filterFreqModPhase = 0; // 0 to 1
+	double const filterFreqModPhaseInc = 0.2/sampleRate;
+	if (filterFreqModPhaseInc > 1) puts("WARNING: filterFreqModPhaseInc > 1");
 	
 	for (int s = 0; s < floatStreamSize; s += 2) {
 		// generate saw wave
-		tonePhase -= toneInc;
-		if (tonePhase < 0) {
-			tonePhase += 1;
-		}
-		double const toneSample = tonePhase;
+		tonePhase -= tonePhaseInc;
+		if (tonePhase < 0) tonePhase += 1;
+		fr (i, toneHistoryLength-1) toneHistory[i] = toneHistory[i+1];
+		double const toneSample =  tonePhase*2 - 1; // -1 to 1
+		toneHistory[toneHistoryLength-1] = toneSample;
 		
 		// filter
-		float static history[maxHistoryLength] = {0};
-		double sum = 0;
-		fr (i, activeHistoryLength-1) {
-			history[i] = history[i+1];
-			sum += history[i];
+		double filteredSample;
+		fr (i, toneHistoryLength) {
+			filterFreqModPhase += filterFreqModPhaseInc;
+			if (filterFreqModPhase > 1) filterFreqModPhase -= 1;
+			double const filterPitch = lerp(12, 93, filterFreqModPhase);
+			double const filterPhaseInc = freqFromPitch(filterPitch)/sampleRate;
+			if (filterPhaseInc > 1) puts("WARNING: filterPhaseInc > 1");
+			filterPhase += filterPhaseInc;
+			if (filterPhase > 1) filterPhase -= 1;
+			filteredSample += toneHistory[i]*sinTau(filterPhase);
 		}
-		history[(int)activeHistoryLength-1] = toneSample;
-		sum += toneSample;
-		float const filteredSample = sum/activeHistoryLength;
+		filteredSample /= toneHistoryLength;
 		
-		// write to buffer, -1 to 1
-		floatStream[s  ] = filteredSample*2 - 1;
-		floatStream[s+1] = filteredSample*2 - 1;
+		// write to buffer
+		floatStream[s  ] = filteredSample;
+		floatStream[s+1] = filteredSample;
 	}
 }
 
