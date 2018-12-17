@@ -5,6 +5,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <SDL2/SDL.h>
+#include "misc.h"
 #include "filter.h"
 
 static void sdlec(int line, char const *file) {
@@ -15,11 +16,6 @@ static void sdlec(int line, char const *file) {
 }
 #define _sdlec sdlec(__LINE__, __FILE__);
 
-#define fr(i, bound) for (int i = 0; i < (bound); i++)
-double const tau = 6.28318530717958647692528676655900576839433879875;
-double sinTau(double n) {return sin(tau*n);}
-double fractionalPart(double n) {return n - (long)n;}
-double lerp(double l, double r, double n) {return l + (r-l)*n;}
 
 double const A4freq  = 440.0;
 double const A4pitch =  57.0;
@@ -50,17 +46,11 @@ void logSpec(SDL_AudioSpec const as) {
 	);
 }
 
-filterModule filter = {
-	.cutoff = 0.999999,
-	.resonance = 0.4,
-	.feedback = 0,
-	.b0 = 0,
-	.b1 = 0,
-	.mode = filterMode_LP
-};
+filterModule filter;
 
 void audioCallback(void *_unused, uint8_t *byteStream, int byteStreamLength) {
 	float *floatStream = (float*)byteStream;
+	double gain = 0.01;
 	
 	// tone
 	double static tonePhase = 0;
@@ -73,7 +63,7 @@ void audioCallback(void *_unused, uint8_t *byteStream, int byteStreamLength) {
 	double const cutoffModPhaseInc = 0.5/sampleRate;
 	if (cutoffModPhaseInc > 1) puts("WARNING: cutoffModPhaseInc > 1");
 	
-	//printf("filter.cutoff: %f\n", filter.cutoff);
+	//printf("filter.c: %f\n", filter.c);
 	//logFilterModule(filter);
 	
 	for (int s = 0; s < floatStreamSize; s += 2) {
@@ -84,14 +74,14 @@ void audioCallback(void *_unused, uint8_t *byteStream, int byteStreamLength) {
 		
 		// generate sine wave cutoff modulation
 		cutoffModPhase += cutoffModPhaseInc;
-		if (cutoffModPhase >= 1) cutoffModPhase -= 1;
+		if (cutoffModPhase > 1) cutoffModPhase -= 1;
 		setCutoff(&filter, sinTau(cutoffModPhase)/2 + 0.5);
 		// filter sample
 		double const filteredSample = filterSample(&filter, sample); // filter the sample
 		
 		// write to buffer
-		floatStream[s  ] = filteredSample;
-		floatStream[s+1] = filteredSample;
+		floatStream[s  ] = filteredSample*gain;
+		floatStream[s+1] = filteredSample*gain;
 	}
 }
 
@@ -124,6 +114,7 @@ int init(void) {
 	if (!audioDeviceId) return 1;
 	sampleRate = audioSpec.freq;
 	floatStreamSize = audioSpec.size/sizeof(float);
+	filter = newFilterModule(1.0, 0.9, filterMode_LP);
 	SDL_PauseAudioDevice(audioDeviceId	, 0);_sdlec;
 	return 0;
 }
