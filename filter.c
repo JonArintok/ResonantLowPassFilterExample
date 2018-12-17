@@ -1,8 +1,14 @@
 #include <stdio.h>
+#include <float.h>
 #include "filter.h"
 
 void updateFeedbackAmount(filterModule *f) {
-	f->feedbackAmount = f->resonance + f->resonance/(1.0 - f->cutoff);
+	if (f->cutoff == 1.0) {
+		f->feedback = f->resonance + f->resonance/(DBL_MIN);
+	}
+	else {
+		f->feedback = f->resonance + f->resonance/(1.0 - f->cutoff);
+	}
 }
 void setResonance(filterModule *f, double resonance) {
 	f->resonance = resonance;
@@ -29,19 +35,15 @@ filterModule newFilterModule(
 	return f;
 }
 
-double filterSample(filterModule *f, double inputValue) {
-	f->b0 += f->cutoff * (inputValue - f->b0);
+double filterSample(filterModule *f, double in) {
+	f->b0 += f->cutoff * (in - f->b0 + f->feedback*(f->b0 - f->b1));
 	f->b1 += f->cutoff * (f->b0 - f->b1);
 	switch (f->mode) {
-		case filterMode_LP:
-			return f->b1;
-		case filterMode_HP:
-			return inputValue - f->b0;
-		case filterMode_BP:
-			return f->b0 - f->b1;
-		default:
-			return 0.0;
+		case filterMode_LP: return f->b1;
+		case filterMode_HP: return in - f->b0;
+		case filterMode_BP: return f->b0 - f->b1;
 	}
+	return 0.0;
 }
 
 
@@ -49,13 +51,13 @@ void logFilterModule(filterModule const f) {
 	printf(
 		" cutoff: %f\n"
 		" resonance: %f\n"
-		" feedbackAmount: %f\n"
+		" feedback: %f\n"
 		" b0: %f\n"
 		" b1: %f\n"
 		" mode: %i\n\n",
 		f.cutoff,
 		f.resonance,
-		f.feedbackAmount,
+		f.feedback,
 		f.b0,
 		f.b1,
 		f.mode

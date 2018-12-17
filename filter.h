@@ -7,15 +7,15 @@ enum {
 };
 
 typedef struct {
-	double cutoff;
-	double resonance;
-	double feedbackAmount;
-	double b0;
-	double b1;
+	double cutoff;    // 0 to 1
+	double resonance; // 0 to 1
+	double feedback;  // 0 to 1
+	double b0;        // -1 to 1
+	double b1;        // -1 to 1
 	int    mode;
 } filterModule;
 
-double filterSample(filterModule *f, double inputValue);
+double filterSample(filterModule *f, double in);
 filterModule newFilterModule(
 	double cutoff,
 	double resonance,

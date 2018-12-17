@@ -52,8 +52,8 @@ void logSpec(SDL_AudioSpec const as) {
 
 filterModule filter = {
 	.cutoff = 0.999999,
-	.resonance = 0,
-	.feedbackAmount = 0,
+	.resonance = 0.4,
+	.feedback = 0,
 	.b0 = 0,
 	.b1 = 0,
 	.mode = filterMode_LP
