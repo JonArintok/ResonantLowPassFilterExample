@@ -9,8 +9,10 @@ enum {
 typedef struct {
 	double c;  // cutoff, 0 to 0.99
 	double q;  // resonance, 0 to 1
-	double b0; // bank0, -1 to 1
-	double b1; // bank1, -1 to 1
+	double b0; // bank 0, -1 to 1
+	double b1; // bank 1, -1 to 1
+	double b2; // bank 2, -1 to 1
+	double b3; // bank 3, -1 to 1
 	int    mode;
 } filterModule;
 
