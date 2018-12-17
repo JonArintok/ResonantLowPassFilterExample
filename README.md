@@ -1,5 +1,5 @@
 # ResonantLowPassFilterExample
-Plays a saw wave while the cutoff frequency is modulated.
+Plays a saw wave while the cutoff frequency and resonance are modulated.
 
 The only dependency is SDL2.
 Build with `make`.
