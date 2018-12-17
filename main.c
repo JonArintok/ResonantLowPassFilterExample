@@ -63,8 +63,16 @@ void audioCallback(void *_unused, uint8_t *byteStream, int byteStreamLength) {
 	double const cutoffModPhaseInc = 0.5/sampleRate;
 	if (cutoffModPhaseInc > 1) puts("WARNING: cutoffModPhaseInc > 1");
 	
-	//printf("filter.c: %f\n", filter.c);
-	//logFilterModule(filter);
+	// resonance modulation
+	double static qModPhase = 0;
+	double const qModPhaseInc = 0.0625/sampleRate;
+	if (qModPhaseInc > 1) puts("WARNING: qModPhaseInc > 1");
+	
+	// note: you normally don't want to print from the audio thread,
+	// but this is for demonstration purposes only.
+	// If the audio is crackly, try removing these print statements.
+	printf("cutoff   : %f\n", filter.c);
+	printf("resonance: %f\n\n", filter.q);
 	
 	for (int s = 0; s < floatStreamSize; s += 2) {
 		// generate saw wave tone
@@ -76,6 +84,12 @@ void audioCallback(void *_unused, uint8_t *byteStream, int byteStreamLength) {
 		cutoffModPhase += cutoffModPhaseInc;
 		if (cutoffModPhase > 1) cutoffModPhase -= 1;
 		setCutoff(&filter, sinTau(cutoffModPhase)/2 + 0.5);
+		
+		// generate sine wave resonance modulation
+		qModPhase += qModPhaseInc;
+		if (qModPhase > 1) qModPhase -= 1;
+		setResonance(&filter, lerp(0.0, 0.95, sinTau(qModPhase)/2 + 0.5));
+		
 		// filter sample
 		double const filteredSample = filterSample(&filter, sample); // filter the sample
 		
@@ -114,7 +128,7 @@ int init(void) {
 	if (!audioDeviceId) return 1;
 	sampleRate = audioSpec.freq;
 	floatStreamSize = audioSpec.size/sizeof(float);
-	filter = newFilterModule(1.0, 0.9, filterMode_LP);
+	filter = newFilterModule(1.0, 0.0, filterMode_LP);
 	SDL_PauseAudioDevice(audioDeviceId	, 0);_sdlec;
 	return 0;
 }
